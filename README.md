@@ -1,4 +1,4 @@
-# Anomaly Detection
+## Anomaly Detection
 ###### Practice of subject "_Desarrollo de Software Crítico_" (Critical Software Development) at university of Malaga.
 
 ----
