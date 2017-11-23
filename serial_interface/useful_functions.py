@@ -4,7 +4,8 @@ import serial
 import numpy as np
 
 
-def get_differences( values ):
+# Calcula el vector diferencia del vector values pasado
+def get_increments( values ):
     length = len(values)
     
     differences = []
@@ -20,6 +21,8 @@ def get_differences( values ):
 
     return differences
 
+# Obtiene la matriz de transición, construyendo una matriz dimension X dimension
+# basandose en los valores de data_array
 def get_transition_matrix( dimension, data_array):
     middle = int(dimension/2)
     length = len(data_array)
@@ -28,18 +31,25 @@ def get_transition_matrix( dimension, data_array):
     if length > 1:
         i = 0
         while i < length-1:
+            # Sumamos 1 a la posicion data_array[i],data_array[i+1] que indica
+            # que la transicion data_array[i] --> data_array[i+1] se ha producido
             transition_matrix[data_array[i]+middle][data_array[i+1]+middle] += 1
             i += 1
     
+    # Todas las posiciones que contienen un 0, se le suma el valor 10e-6
     transition_matrix[ transition_matrix == 0] += 10e-6
 
     i = 0
     while i < dimension:
+        # Para que la suma de cada una de las filas sume 1, dividimos por
+        # la fila por la suma de todos los elementos de la fila.
         transition_matrix[i] = transition_matrix[i]/transition_matrix[i].sum() 
         i += 1
     
     return transition_matrix # a square matrix
 
+# En esta funcion se comprueba que la matriz de transición 
+# cumple la condición de que todas sus filas sumen 1.
 def satisfy_condition(transition_matrix, dimension):
     i = 0
     condition = True 
@@ -56,15 +66,22 @@ def satisfy_condition(transition_matrix, dimension):
     
     return
 
+# Calcula el minimo likelihood, es decir, devuelve el umbral necesario
+# para detectar las anomalías basándonos en unos valores pasados, en una 
+# matriz de transición obtenida anteriormente, y un tamaño de ventana.
 def minimum_likelihood( values, transition_matrix, window_size ):
     length = len(values)
     middle = int(transition_matrix.shape[1]/2)
     minimum = 1
 
     i = 0
+    # Calculamos para cada ventana, de dimension indicada en window_size, 
+    # con incrementos de 1, el likelihood. Guardamos el minimo de ellos.
     while i < length-(window_size+1):
         j = 0
         likeli = 1
+
+        # El bucle produce el likelihood para una ventana
         while j < window_size:
             likeli *= transition_matrix[values[i+(j-1)]+middle][values[i+(j-1)+1]+middle]
             j += 1
@@ -76,6 +93,7 @@ def minimum_likelihood( values, transition_matrix, window_size ):
 
     return minimum
 
+# Detectamos las anomalias de forma Offline para un fichero que contenga la información
 def detect_anomalies_from_file(file, transition_matrix, threshold, window_size):
     if os.path.exists(file):
         with open(file) as f:
@@ -83,15 +101,17 @@ def detect_anomalies_from_file(file, transition_matrix, threshold, window_size):
                 middle = int(transition_matrix.shape[1]/2) # square matrix
 
                 values = [int(linea) for linea in f]
-                increments = get_differences(values)
+                increments = get_increments(values)
 
                 length = len(increments)
 
                 if length > 1:
                     i = 0
+                    # Vamos leyendo el vector increments con ventanas de tamaño window_size
                     while i < length-(window_size+1):
                         j = 0
                         likeli = 1
+                        # Calculamos el likelihood para una ventana
                         while j < window_size:
                             likeli *= transition_matrix[increments[i+(j-1)]+middle][increments[i+(j-1)+1]+middle]
                             j += 1
@@ -106,6 +126,7 @@ def detect_anomalies_from_file(file, transition_matrix, threshold, window_size):
                 print("\nThe file ",file,"doesn't exist.\n")
     return
 
+# Desplaza en uno hacia la derecha el vector pasado como parametros.
 def displace( vector ):
     i = 1
     while i < len(vector):
@@ -114,6 +135,7 @@ def displace( vector ):
     vector[i-1] = 0
     return vector
 
+# Detectamos en tiempo real las anomalías
 def detect_anomalies_real_time(dev, baudrate, transition_matrix, threshold, window_size):
     
     middle = int(transition_matrix.shape[1]/2) # square matrix
@@ -128,9 +150,10 @@ def detect_anomalies_real_time(dev, baudrate, transition_matrix, threshold, wind
     arduino.setDTR(True)
 
     i = 0
-    pila = np.zeros(window_size)
+    pila = np.zeros(window_size) # Vector de tamaño window_size
     while True:
         try:
+            # Leemos linea del puerto Serial
             line = arduino.readline()
         except KeyboardInterrupt:
             print("\nExiting.")
@@ -145,14 +168,18 @@ def detect_anomalies_real_time(dev, baudrate, transition_matrix, threshold, wind
         except ValueError:
             # Si produce fallo al pasarlo a int, letras o carácteres no válidos
             continue
-
+        
         if i < window_size:   
+            # Llenamos la pila
             pila[i] = next_value
             i += 1
         else:
-            increments = get_differences( pila )
+            # Calculamos los incrementos
+            increments = get_increments( pila )
+            
             j = 0
             likeli = 1
+            # Calculamos el likelihood del vector increments
             while j < window_size-2: # increments length is window_size-1
                 likeli *= transition_matrix[increments[j]+middle][increments[j+1]+middle]    
                 j += 1
@@ -160,8 +187,9 @@ def detect_anomalies_real_time(dev, baudrate, transition_matrix, threshold, wind
             if likeli < threshold:
                 print("We have found an anomaly in ", pila, " with value ", likeli)
 
+            # Añadimos el siguiente valor
             pila = displace(pila)
             pila[i-1] = next_value
 
-        # print(pila)
+        print(pila)
     return
