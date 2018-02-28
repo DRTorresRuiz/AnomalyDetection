@@ -1,8 +1,8 @@
 # Anomaly Detection
 
-We are detecting anomalies using Markov chains and temperature sensors.
+This repository contains a simple example about how to detect anomalies using Markov chains and temperature sensors.
 	
-> It works with Python and ARDUINO
+> Works with Python and ARDUINO
 
 > Temperature sensor NTCLE100
 
